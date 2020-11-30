@@ -1,0 +1,132 @@
+#include <gflags/gflags.h>
+#include <boost/thread.hpp>
+#include "MnmpOptions.h"
+#include "MnmpGlobal.h"
+
+#include "minimap.h"
+#include "mmpriv.h"
+
+
+DEFINE_string(d, "",
+		"-d arg in original minimap2, dump index to file");
+DEFINE_bool(a, true,
+                "-a arg in original minimap2, output in SAM format");
+DEFINE_bool(sam, false,
+                "--sam arg in original minimap2, output in SAM format");
+DEFINE_int32(t, boost::thread::hardware_concurrency(),
+                "-t arg in original minimap2, number of threads");
+DEFINE_string(x, "sr",
+                "-x arg in original minimap2, preset");
+DEFINE_bool(frag, true,
+                "--frag arg in original minimap2, enable frag g_mnmpOptde");
+
+DEFINE_string(R, "@RG\\tID:sample\\tSM:sample\\tPL:illumina\\tLB:sample",
+                "-R arg in original minimap2, SAM read group line in a format like '@RG\\tID:foo\\tSM:bar'");
+
+DEFINE_string(output_dir, "./",
+                "(deprecated) output directory for SAM/BAM files");
+DEFINE_int32(output_flag, -1,
+                "Flag to specify output format: "
+                "0: BAM (compressed); 1: BAM (uncompressed); 2: SAM");
+DEFINE_int32(output_size, 128,
+                "number of batches in a SAM/BAM file");
+DEFINE_bool(inorder_output, false,
+                "write all batches in order");
+DEFINE_bool(sort, true,
+                "(deprecated) apply coordinate sort");
+DEFINE_bool(bam, true,
+                "output in BAM format");
+DEFINE_int32(extra_threads, 0,
+                "number of extra threads to be reduces");
+
+#ifdef BUILD_FPGA
+DEFINE_bool(use_fpga, false,
+                "enable fpga computation");
+DEFINE_bool(fpga_only, false,
+                "disable cpu for fpga-available stages");
+DEFINE_int32(fpga_threads, 1,
+                "number of FPGA threads");
+DEFINE_string(fpga_path, "",
+                "path to FPGA bitstream");
+#ifdef LOCAL_BLAZE
+DEFINE_string(blaze_conf, "",
+                "config file for Blaze");
+#endif
+#endif
+
+DEFINE_bool(use_numa, true,
+                "use NUMA lib for hardware locality");
+
+DEFINE_int32(num_buckets, 1024,
+                "the number of buckets used on bucket sort");
+DEFINE_int32(compression_level, -1,
+                "the compression level of bam output");
+
+DEFINE_bool(disable_bucketsort, false,
+            "disable bucketsort");
+
+DEFINE_string(temp_dir, "/tmp",
+            "temp directory for bucket bams");
+
+DEFINE_string(output, "", "the output file path");
+
+DEFINE_bool(disable_sort, false,
+            "output unsorted bams");
+
+DEFINE_bool(remove_duplicates, false,
+            "remove duplicate reads from output");
+
+DEFINE_bool(filter_unmap, false,
+            "filter unmapped reads from output");
+
+DEFINE_bool(disable_markdup, false,
+            "disable markduplicate function");
+
+DEFINE_bool(merge_bams, true,
+            "merge partial BAM files in the end");
+
+int fc_set_opt() {
+  mm_idxopt_init(g_mnmpIpt);
+  mm_mapopt_init(g_mnmpOpt);
+
+  if (FLAGS_x == "sr" || FLAGS_x == "short") {
+    g_mnmpIpt->flag = 0, g_mnmpIpt->k = 21, g_mnmpIpt->w = 11;
+    g_mnmpOpt->flag |= MM_F_SR | MM_F_FRAG_MODE | MM_F_NO_PRINT_2ND | MM_F_2_IO_THREADS | MM_F_HEAP_SORT;
+    g_mnmpOpt->pe_ori = 0<<1|1; // FR
+    g_mnmpOpt->a = 2, g_mnmpOpt->b = 8, g_mnmpOpt->q = 12, g_mnmpOpt->e = 2, g_mnmpOpt->q2 = 24, g_mnmpOpt->e2 = 1;
+    g_mnmpOpt->zdrop = g_mnmpOpt->zdrop_inv = 100;
+    g_mnmpOpt->end_bonus = 10;
+    g_mnmpOpt->max_frag_len = 800;
+    g_mnmpOpt->max_gap = 100;
+    g_mnmpOpt->bw = 100;
+    g_mnmpOpt->pri_ratio = 0.5f;
+    g_mnmpOpt->min_cnt = 2;
+    g_mnmpOpt->min_chain_score = 25;
+    g_mnmpOpt->min_dp_max = 40;
+    g_mnmpOpt->best_n = 20;
+    g_mnmpOpt->mid_occ = 1000;
+    g_mnmpOpt->max_occ = 5000;
+    g_mnmpOpt->mini_batch_size = 2560000;
+  }
+  else {
+    return -1;
+  }
+
+  if (FLAGS_frag) {
+    g_mnmpOpt->flag |= MM_F_FRAG_MODE;
+  }
+  else {
+    g_mnmpOpt->flag &= ~MM_F_FRAG_MODE;
+  }
+
+  // Config output format
+  if (FLAGS_a || FLAGS_sam) {
+    g_mnmpOpt->flag |= MM_F_OUT_SAM | MM_F_CIGAR;
+    FLAGS_output_flag = 2;
+  }
+  if (FLAGS_bam || FLAGS_output_flag == -1) { //Bam config will overwrite sam config
+    FLAGS_output_flag = 1;
+  } //TODO: add support for PAF format
+
+  return 0;
+}

@@ -1,0 +1,11 @@
+.cproject
+.project
+.*.swp
+.*.sw*
+*.a
+*.o
+*.dSYM
+mappy.c
+build
+build/*
+build*
